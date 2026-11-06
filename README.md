@@ -1,32 +1,101 @@
 # Nightscout on Oracle Cloud
 
-`deploy.sh` installs Nightscout on an Ubuntu virtual machine in Oracle Cloud. You answer a few questions. The script installs Docker, opens the VM firewall, and starts Nightscout, MongoDB, and Caddy.
+This is the whole path: open a free Oracle Cloud account, create one Ubuntu server, give it a free DuckDNS name, and run `deploy.sh` on that server. The script installs Nightscout and opens it at `https://yourname.duckdns.org`.
 
-Nightscout shows continuous glucose monitor data. It is not an approved medical device, and it does not replace a meter, a pump, or clinical care. This repository only runs the installer.
+Nightscout shows continuous glucose monitor data in a browser. It is not an approved medical device. It does not replace a meter, a pump, or clinical care.
 
 [עברית](#עברית)
 
 ---
 
-## Before you run the script
+## English
 
-The script does not create the Oracle account or the virtual machine. Do this once:
+You do the Oracle and DuckDNS steps in a browser. You run `deploy.sh` only after you have connected to the server. The script does not create the Oracle account, the server, or the DuckDNS name.
 
-1. Sign in at [cloud.oracle.com](https://cloud.oracle.com/) and create a **Compute instance**.
-2. Image: **Ubuntu 24.04 or 22.04**. Shape: `VM.Standard.A1.Flex` with **1 OCPU** and **6 GB** of memory. If Oracle reports that Ampere is out of capacity, use `VM.Standard.E2.1.Micro` instead. The script adds swap on that smaller machine.
-3. Assign a **public IPv4 address** and add an SSH key. Copy the public IP from the instance page.
-4. Open the instance subnet’s **security list** and add two ingress rules, source `0.0.0.0/0`, TCP, ports **80** and **443**. Port 22 is already open.
-5. For HTTPS, create a DNS **A record** from your hostname to that public IP before you run the script. Have an email address ready for the certificate. You can skip this and use `http://` plus the public IP.
+### 1. Open an Oracle Cloud account
 
-## Run it
+1. Go to [oracle.com/cloud/free](https://www.oracle.com/cloud/free/) and start the free account.
+2. Use a personal email you can open. Oracle sends a verification link. Open it before the rest of the form will continue.
+3. Choose a **cloud account name**. You type this name every time you log in. Write it down.
+4. Choose the **home region** once. It cannot be changed later, and the free server has to live in that region. In Israel, choose **Israel Central (Jerusalem)** if it is in the list. If you would rather have a region where free Arm servers are easier to get, choose **Germany Central (Frankfurt)**.
+5. Enter your address and mobile number. Oracle sends a code to the phone.
+6. Enter a credit or debit card. Oracle uses it to check that the account belongs to a real person. A small temporary charge may appear and is then reversed. Prepaid and virtual cards are often rejected. Always Free resources are not a monthly bill. Do not upgrade the account to Pay As You Go, and do not create databases or extra disks.
+7. Wait until Oracle says the account is ready. That can take minutes, and sometimes longer. They email you.
 
-From your computer:
+Log in later at [cloud.oracle.com](https://cloud.oracle.com/) with the cloud account name and the email.
 
-```bash
-ssh -i /path/to/your-key ubuntu@YOUR_PUBLIC_IP
+New accounts also get a short trial with credits. The server in the next step is an Always Free shape, so it does not spend those credits. When the trial ends, this server can stay.
+
+### 2. Create the server
+
+In the console, open the navigation menu, then **Compute**, then **Instances**, then **Create instance**.
+
+| Setting | What to choose |
+|---|---|
+| Name | `nightscout` |
+| Placement | Leave an availability domain marked **Always Free Eligible** |
+| Image | **Canonical Ubuntu 24.04**. Ubuntu 22.04 is also fine. Do not choose Oracle Linux. The script stops on anything except Ubuntu. |
+| Shape | **Ampere**, `VM.Standard.A1.Flex`, **1 OCPU**, **6 GB** memory. The free Ampere allowance is 2 OCPUs and 12 GB, so this uses half of it. |
+| Networking | Create a new virtual cloud network. Public subnet. **Assign a public IPv4 address**. |
+| SSH keys | **Generate a key pair**, then download the private key. Save the file. There is no password login. |
+
+Click **Create**. Wait until the instance says **Running**. Copy the **Public IP address** from the instance page.
+
+If creation fails with **out of host capacity**, change the availability domain to another one marked Always Free Eligible and try again. If Ampere is still unavailable, use the AMD shape `VM.Standard.E2.1.Micro` (1 GB). The script adds swap on that size. It is slower, and it still runs one Nightscout site.
+
+Oracle can take back a free server that stays almost idle for a week. A site that receives glucose uploads is normally busy enough. Details are on Oracle's [Always Free](https://docs.oracle.com/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm) page.
+
+### 3. Let the internet reach the site
+
+Oracle allows SSH (port 22) and blocks the web until you add two rules. The script cannot do this part.
+
+1. On the instance page, click the **subnet** name.
+2. Click the **security list** (usually **Default Security List**).
+3. Click **Add Ingress Rules**. Leave **Stateless** unchecked.
+
+Add one rule, then add a second:
+
+| Source CIDR | Protocol | Destination port |
+|---|---|---|
+| `0.0.0.0/0` | TCP | `80` |
+| `0.0.0.0/0` | TCP | `443` |
+
+### 4. Create the DuckDNS name
+
+DuckDNS is free. There is no payment page.
+
+1. Open [duckdns.org](https://www.duckdns.org/) and sign in with Google, GitHub, Reddit, or X.
+2. Under domains, type a short name and add it. Letters and numbers only, for example `mysugar`. The site name becomes `mysugar.duckdns.org`. If the name is taken, pick another.
+3. DuckDNS fills in the IP address of the computer you are using right now. That is your home address, and it is the wrong one. Delete it, paste the **public IP from the Oracle instance page**, and click **update ip**.
+4. Copy the **token** at the top of the DuckDNS page and keep it with the SSH key. You need the token only if the server's IP changes later.
+
+Check from your own computer before you continue. The answer must be the Oracle IP, not your home IP.
+
+```text
+nslookup mysugar.duckdns.org
 ```
 
-On the VM:
+### 5. Connect to the server
+
+The private key is the file Oracle made you download. On Windows, in PowerShell, from the folder that contains the key:
+
+```powershell
+icacls .\ssh-key.key /inheritance:r /grant:r "${env:USERNAME}:(R)"
+ssh -i .\ssh-key.key ubuntu@YOUR_PUBLIC_IP
+```
+
+Replace `ssh-key.key` with the real file name, and `YOUR_PUBLIC_IP` with the address from the instance page. The first time, type `yes` when SSH asks whether to trust the server.
+
+On macOS or Linux:
+
+```bash
+chmod 600 ~/Downloads/ssh-key.key
+ssh -i ~/Downloads/ssh-key.key ubuntu@YOUR_PUBLIC_IP
+```
+
+The login name is `ubuntu`. You are then on the server. The next commands run there, not on your PC.
+
+### 6. Run the script
 
 ```bash
 sudo apt-get update
@@ -36,63 +105,56 @@ cd Nightscout-OCI
 sudo ./deploy.sh
 ```
 
-`sudo ./deploy.sh --help` prints the variables below and does not install anything.
+The script asks eight things, in this order. Nothing is shown while you type the API secret. That is normal.
 
-## What it asks
-
-| Question | What to enter |
+| Prompt | What to type |
 |---|---|
-| Prompt language | `en` or `he` |
-| API secret | At least 12 characters, typed twice. No quotes, `#`, or `$`. This is the password for AndroidAPS, xDrip, or another uploader. It is saved only in `/opt/nightscout/.env`. |
-| Glucose units | `mmol` (default) or `mg/dl` |
-| Timezone | Default `Asia/Jerusalem`. Any [IANA name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) works. |
-| Nightscout language | `en` or `he` |
-| Domain | Your hostname, or leave empty for HTTP on the public IP |
-| Email | Only when you set a domain. Let’s Encrypt uses it for the certificate. |
-| Anyone with the link can view | `no` (default) asks each visitor for the API secret. `yes` or `כן` lets anyone with the URL see the chart. |
+| Prompt language (en/he) | `en`, or `he` if you want the rest of the questions in Hebrew. Press Enter to keep `en`. |
+| API secret, twice | At least 12 letters and digits. No spaces, quotes, `#`, or `$`. Write it down. AndroidAPS or xDrip needs the same value. It is saved only in `/opt/nightscout/.env` on the server. |
+| Glucose units | Press Enter for `mmol`, which is the usual choice in Israel. Type `mg/dl` only if the uploader and the pump profile use mg/dL. |
+| Timezone | Press Enter for `Asia/Jerusalem`. |
+| Nightscout language (en/he) | `he` for a Hebrew site, or `en`. |
+| Domain name for HTTPS | The full DuckDNS name, such as `mysugar.duckdns.org`. No `https://`. |
+| Email for the certificate | A real email address. Let's Encrypt uses it for expiry notices. |
+| Let anyone with the link view the site? | `no` unless you want the chart visible to anyone who knows the address. `yes` or `כן` makes it public. |
 
-When it finishes, it prints the URL. The first start waits while Docker downloads the images. In the uploader, set that URL and the same API secret.
+The first run downloads the Nightscout, database, and certificate software. That often takes several minutes. At the end it prints `https://mysugar.duckdns.org`. Open that address. With the default answer `no`, the site asks for the API secret before it shows data.
 
-## Run it without questions
+In AndroidAPS or xDrip, set the Nightscout URL to that same `https://...duckdns.org` address and set the API secret to the value you typed.
+
+### If you already know every answer
+
+You can skip the questions. `API_SECRET` is required. The domain must be the full DuckDNS name, and the email is required because a domain is set.
 
 ```bash
 sudo API_SECRET='choose-a-long-secret' DISPLAY_UNITS='mmol' TZ='Asia/Jerusalem' \
-  NS_LANGUAGE=he SITE_LANGUAGE=he NS_DOMAIN='ns.example.com' ACME_EMAIL='you@example.com' \
+  NS_LANGUAGE=he SITE_LANGUAGE=he NS_DOMAIN='mysugar.duckdns.org' ACME_EMAIL='you@example.com' \
   AUTH_DEFAULT_ROLES=denied ./deploy.sh
 ```
 
-`API_SECRET` is required in this form. The others are optional.
+`AUTH_DEFAULT_ROLES=denied` hides the chart until a visitor has the secret. `readable` shows it to anyone with the link.
 
-| Variable | Default | Values |
-|---|---|---|
-| `API_SECRET` | none | at least 12 characters |
-| `DISPLAY_UNITS` | `mmol` | `mmol` or `mg/dl` |
-| `TZ` | `Asia/Jerusalem` | IANA timezone |
-| `NS_LANGUAGE` | `en` | `en` or `he`, the language of the script’s messages |
-| `SITE_LANGUAGE` | same as `NS_LANGUAGE` | `en` or `he`, the Nightscout site |
-| `NS_DOMAIN` | empty | hostname for HTTPS |
-| `ACME_EMAIL` | empty | required when `NS_DOMAIN` is set |
-| `AUTH_DEFAULT_ROLES` | `denied` | `denied` or `readable` |
+Running `sudo ./deploy.sh` again replaces `/opt/nightscout/.env`. Have the API secret ready.
 
-Running `sudo ./deploy.sh` again replaces `/opt/nightscout/.env`. Keep the API secret.
+### When something fails
 
-## Afterward
+| What you see | What to do |
+|---|---|
+| SSH does not connect | The instance is Running, the user is `ubuntu`, and this is the private key you downloaded for this instance. |
+| The browser spins and never loads | The security list is missing TCP 80 or 443. Add them, then run `sudo ./deploy.sh` again. |
+| The browser warns about the certificate | `nslookup yourname.duckdns.org` must print the Oracle public IP. Then on the server run `cd /opt/nightscout && sudo docker compose restart caddy` and wait a couple of minutes. |
+| The page opens and the phone is rejected | The URL in the uploader is `https://` plus the DuckDNS name, and the API secret matches exactly, including capital letters. |
+| You stopped the server and the site disappeared | A stopped instance can come back with a new public IP. Copy the new IP into DuckDNS, click **update ip**, and restart Caddy with the command above. The token from the DuckDNS page is the other way to set it: `https://www.duckdns.org/update?domains=mysugar&token=YOUR_TOKEN&ip=NEW_IP` |
 
-Logs:
+Logs on the server:
 
 ```bash
 cd /opt/nightscout && sudo docker compose logs -f
 ```
 
-Update the containers (the glucose data stays in `mongo-data`):
+### Updates and a copy of the data
 
-```bash
-cd /opt/nightscout
-sudo docker compose pull
-sudo docker compose up -d
-```
-
-Backup. Stop the stack so the copy is consistent, then copy both files off the VM:
+Glucose history is in `/opt/nightscout/mongo-data`. The API secret is in `/opt/nightscout/.env`. Copy both off the server. A disk that exists only at Oracle is not a backup.
 
 ```bash
 cd /opt/nightscout
@@ -101,44 +163,110 @@ sudo tar czf "$HOME/nightscout-mongo-backup.tgz" mongo-data
 sudo docker compose start
 ```
 
-Keep a copy of `/opt/nightscout/.env` with that archive.
+To update Nightscout later, without running the questions again:
 
-## If the site does not open
-
-1. The security list must allow TCP 80 and 443 from `0.0.0.0/0`. Then run `sudo ./deploy.sh` again.
-2. Read the log: `cd /opt/nightscout && sudo docker compose logs -f`
-3. If the certificate failed, the DNS A record must point at this VM and ports 80 and 443 must be reachable. Then: `cd /opt/nightscout && sudo docker compose restart caddy`
-4. On the 1 GB Micro shape, wait a few minutes after the first start.
+```bash
+cd /opt/nightscout
+sudo docker compose pull
+sudo docker compose up -d
+```
 
 ---
 
 # עברית
 
-`deploy.sh` מתקין את Nightscout על מכונת אובונטו ב-Oracle Cloud. עונים על כמה שאלות. הסקריפט מתקין את Docker, פותח את חומת האש של המכונה, ומפעיל את Nightscout, את MongoDB ואת Caddy.
+זה המסלול המלא: פותחים חשבון Oracle Cloud בחינם, יוצרים שרת אובונטו אחד, נותנים לו שם בחינם ב-DuckDNS, ומריצים את `deploy.sh` על השרת. הסקריפט מתקין את Nightscout ופותח אותו בכתובת `https://yourname.duckdns.org`.
 
-Nightscout מציג נתוני חיישן סוכר. הוא אינו מכשיר רפואי מאושר, והוא אינו מחליף מד סוכר, משאבה או טיפול רפואי. המאגר הזה רק מריץ את ההתקנה.
+Nightscout מציג נתוני חיישן סוכר בדפדפן. הוא אינו מכשיר רפואי מאושר. הוא אינו מחליף מד סוכר, משאבה או טיפול רפואי.
 
 [English](#nightscout-on-oracle-cloud)
 
-## לפני שמריצים את הסקריפט
+את שלבי Oracle ו-DuckDNS עושים בדפדפן. את `deploy.sh` מריצים רק אחרי שהתחברתם לשרת. הסקריפט לא יוצר את חשבון Oracle, לא את השרת, ולא את השם ב-DuckDNS.
 
-הסקריפט לא יוצר את חשבון Oracle ולא את המכונה. עושים את זה פעם אחת:
+### 1. פתיחת חשבון Oracle Cloud
 
-1. נכנסים ל-[cloud.oracle.com](https://cloud.oracle.com/) ויוצרים **Compute instance**.
-2. Image: **Ubuntu 24.04 או 22.04**. Shape: `VM.Standard.A1.Flex` עם **1 OCPU** ו-**6 GB** זיכרון. אם Oracle מדווחת שאין קיבולת ל-Ampere, משתמשים ב-`VM.Standard.E2.1.Micro`. הסקריפט מוסיף swap על המכונה הקטנה הזו.
-3. מגדירים **כתובת IPv4 ציבורית** ומוסיפים מפתח SSH. מעתיקים את כתובת ה-IP הציבורית מעמוד המכונה.
-4. פותחים את ה-**security list** של תת-הרשת ומוסיפים שני כללי ingress, מקור `0.0.0.0/0`, TCP, פורטים **80** ו-**443**. פורט 22 כבר פתוח.
-5. כדי לקבל HTTPS יוצרים רשומת DNS מסוג **A** מהשם שלכם אל כתובת ה-IP הציבורית לפני שמריצים את הסקריפט. צריך כתובת אימייל לתעודה. אפשר לדלג ולהשתמש ב-`http://` יחד עם כתובת ה-IP הציבורית.
+1. נכנסים ל-[oracle.com/cloud/free](https://www.oracle.com/cloud/free/) ומתחילים חשבון בחינם.
+2. משתמשים באימייל אישי שאפשר לפתוח. Oracle שולחת קישור אימות. פותחים אותו לפני שהטופס ממשיך.
+3. בוחרים **cloud account name**. את השם הזה מקלידים בכל כניסה. רושמים אותו.
+4. בוחרים **home region** פעם אחת. אי אפשר להחליף אותו אחר כך, והשרת החינמי חייב לשבת באזור הזה. בישראל בוחרים **Israel Central (Jerusalem)** אם הוא ברשימה. אם מעדיפים אזור שבו קל יותר לקבל שרת Arm חינמי, בוחרים **Germany Central (Frankfurt)**.
+5. ממלאים כתובת ומספר נייד. Oracle שולחת קוד לטלפון.
+6. ממלאים כרטיס אשראי או חיוב. Oracle משתמשת בו כדי לבדוק שהחשבון שייך לאדם אמיתי. יכולה להופיע חיוב זמני קטן, והוא מוחזר. כרטיסים נטענים ווירטואליים נדחים לעיתים קרובות. משאבי Always Free אינם חשבון חודשי. לא משדרגים את החשבון ל-Pay As You Go, ולא יוצרים מסדי נתונים או דיסקים נוספים.
+7. מחכים עד ש-Oracle מודיעה שהחשבון מוכן. זה יכול לקחת דקות, ולפעמים יותר. הם שולחים אימייל.
 
-## הרצה
+אחר כך נכנסים ב-[cloud.oracle.com](https://cloud.oracle.com/) עם שם חשבון הענן והאימייל.
 
-מהמחשב שלכם:
+לחשבון חדש יש גם תקופת ניסיון עם קרדיטים. השרת בשלב הבא הוא מסוג Always Free, ולכן הוא לא מוציא את הקרדיטים האלה. כשתקופת הניסיון נגמרת, השרת הזה יכול להישאר.
 
-```bash
-ssh -i /path/to/your-key ubuntu@YOUR_PUBLIC_IP
+### 2. יצירת השרת
+
+בקונסול פותחים את תפריט הניווט, אחר כך **Compute**, אחר כך **Instances**, ואז **Create instance**.
+
+| הגדרה | מה בוחרים |
+|---|---|
+| שם | `nightscout` |
+| מיקום | משאירים availability domain שמסומן **Always Free Eligible** |
+| Image | **Canonical Ubuntu 24.04**. גם Ubuntu 22.04 מתאים. לא בוחרים Oracle Linux. הסקריפט נעצר על כל מערכת שאינה אובונטו. |
+| Shape | **Ampere**, `VM.Standard.A1.Flex`, **1 OCPU**, **6 GB** זיכרון. המכסה החינמית של Ampere היא 2 OCPUs ו-12 GB, אז זה חצי ממנה. |
+| רשת | יוצרים רשת וירטואלית חדשה. תת-רשת ציבורית. **Assign a public IPv4 address**. |
+| מפתחות SSH | **Generate a key pair**, ואז מורידים את המפתח הפרטי. שומרים את הקובץ. אין כניסה עם סיסמה. |
+
+לוחצים **Create**. מחכים עד שהמכונה במצב **Running**. מעתיקים את **Public IP address** מעמוד המכונה.
+
+אם היצירה נכשלת עם **out of host capacity**, מחליפים availability domain לאחר שמסומן Always Free Eligible ומנסים שוב. אם Ampere עדיין לא זמין, משתמשים בצורה של AMD בשם `VM.Standard.E2.1.Micro` (1 GB). הסקריפט מוסיף swap בגודל הזה. זה איטי יותר, וזה עדיין מריץ אתר Nightscout אחד.
+
+Oracle יכולה לקחת בחזרה שרת חינמי שנשאר כמעט בלי פעילות במשך שבוע. אתר שמקבל העלאות סוכר בדרך כלל פעיל מספיק. הפירוט בעמוד [Always Free](https://docs.oracle.com/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm) של Oracle.
+
+### 3. לאפשר לאינטרנט להגיע לאתר
+
+Oracle מאפשרת SSH (פורט 22) וחוסמת את האתר עד שמוסיפים שני כללים. הסקריפט לא יכול לעשות את החלק הזה.
+
+1. בעמוד המכונה לוחצים על שם ה-**subnet**.
+2. לוחצים על ה-**security list** (בדרך כלל **Default Security List**).
+3. לוחצים **Add Ingress Rules**. משאירים את **Stateless** לא מסומן.
+
+מוסיפים כלל אחד, ואז כלל שני:
+
+| Source CIDR | פרוטוקול | פורט יעד |
+|---|---|---|
+| `0.0.0.0/0` | TCP | `80` |
+| `0.0.0.0/0` | TCP | `443` |
+
+### 4. יצירת השם ב-DuckDNS
+
+DuckDNS בחינם. אין עמוד תשלום.
+
+1. פותחים את [duckdns.org](https://www.duckdns.org/) ונכנסים עם Google, GitHub, Reddit או X.
+2. תחת domains מקלידים שם קצר ומוסיפים אותו. אותיות וספרות בלבד, למשל `mysugar`. שם האתר יהיה `mysugar.duckdns.org`. אם השם תפוס, בוחרים אחר.
+3. DuckDNS ממלא את כתובת ה-IP של המחשב שבו אתם גולשים עכשיו. זו כתובת הבית, והיא כתובת שגויה. מוחקים אותה, מדביקים את **כתובת ה-IP הציבורית מעמוד המכונה ב-Oracle**, ולוחצים **update ip**.
+4. מעתיקים את ה-**token** מראש עמוד DuckDNS ושומרים אותו עם מפתח ה-SSH. צריך את הטוקן רק אם כתובת ה-IP של השרת תשתנה אחר כך.
+
+בודקים מהמחשב שלכם לפני שממשיכים. התשובה חייבת להיות כתובת ה-IP של Oracle, לא כתובת הבית.
+
+```text
+nslookup mysugar.duckdns.org
 ```
 
-על המכונה:
+### 5. התחברות לשרת
+
+המפתח הפרטי הוא הקובץ ש-Oracle גרמה לכם להוריד. ב-Windows, ב-PowerShell, מהתיקייה שבה נמצא המפתח:
+
+```powershell
+icacls .\ssh-key.key /inheritance:r /grant:r "${env:USERNAME}:(R)"
+ssh -i .\ssh-key.key ubuntu@YOUR_PUBLIC_IP
+```
+
+מחליפים את `ssh-key.key` בשם הקובץ האמיתי, ואת `YOUR_PUBLIC_IP` בכתובת מעמוד המכונה. בפעם הראשונה מקלידים `yes` כש-SSH שואל אם לסמוך על השרת.
+
+ב-macOS או ב-Linux:
+
+```bash
+chmod 600 ~/Downloads/ssh-key.key
+ssh -i ~/Downloads/ssh-key.key ubuntu@YOUR_PUBLIC_IP
+```
+
+שם המשתמש הוא `ubuntu`. עכשיו אתם על השרת. הפקודות הבאות רצות שם, לא על המחשב שלכם.
+
+### 6. הרצת הסקריפט
 
 ```bash
 sudo apt-get update
@@ -148,63 +276,56 @@ cd Nightscout-OCI
 sudo ./deploy.sh
 ```
 
-`sudo ./deploy.sh --help` מדפיס את המשתנים שלמטה ולא מתקין כלום.
+הסקריפט שואל שמונה דברים, בסדר הזה. בזמן שמקלידים את סוד ה-API לא רואים כלום על המסך. זה תקין.
 
-## על מה הוא שואל
-
-| שאלה | מה מזינים |
+| שאלה | מה מקלידים |
 |---|---|
-| שפת השאלות | `en` או `he` |
-| סוד API | לפחות 12 תווים, פעמיים. בלי גרשיים, בלי `#` ובלי `$`. זו הסיסמה של AndroidAPS, xDrip או תוכנת העלאה אחרת. היא נשמרת רק ב-`/opt/nightscout/.env`. |
-| יחידות סוכר | `mmol` (ברירת מחדל) או `mg/dl` |
-| אזור זמן | ברירת המחדל `Asia/Jerusalem`. כל [שם IANA](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) מתאים. |
-| שפת האתר | `en` או `he` |
-| שם מתחם | השם שלכם, או ריק כדי להשתמש ב-HTTP על כתובת ה-IP הציבורית |
-| אימייל | רק כשמגדירים שם מתחם. Let’s Encrypt משתמשת בו לתעודה. |
-| כל מי שיש לו את הקישור יכול לצפות | `no` (ברירת מחדל) מבקש מכל מבקר את סוד ה-API. `yes` או `כן` מאפשר לכל מי שיש לו את הכתובת לראות את הגרף. |
+| Prompt language (en/he) | `en`, או `he` אם רוצים את שאר השאלות בעברית. Enter משאיר `en`. |
+| סוד API, פעמיים | לפחות 12 אותיות וספרות. בלי רווחים, בלי גרשיים, בלי `#` ובלי `$`. רושמים אותו. AndroidAPS או xDrip צריכים את אותו ערך. הוא נשמר רק בקובץ `/opt/nightscout/.env` על השרת. |
+| יחידות סוכר | Enter עבור `mmol`, הבחירה הרגילה בישראל. מקלידים `mg/dl` רק אם תוכנת ההעלאה ופרופיל המשאבה משתמשים ב-mg/dL. |
+| אזור זמן | Enter עבור `Asia/Jerusalem`. |
+| שפת האתר (en/he) | `he` לאתר בעברית, או `en`. |
+| שם מתחם ל-HTTPS | השם המלא מ-DuckDNS, למשל `mysugar.duckdns.org`. בלי `https://`. |
+| אימייל לתעודה | כתובת אימייל אמיתית. Let's Encrypt משתמשת בה להודעות על תפוגת התעודה. |
+| כל מי שיש לו את הקישור יכול לצפות? | `no`, אלא אם רוצים שהגרף יהיה גלוי לכל מי שמכיר את הכתובת. `yes` או `כן` הופכים אותו לציבורי. |
 
-בסיום הוא מדפיס את הכתובת. ההפעלה הראשונה ממתינה בזמן ש-Docker מוריד את הדמויות. בתוכנת ההעלאה מגדירים את הכתובת הזו ואת אותו סוד API.
+ההרצה הראשונה מורידה את תוכנת Nightscout, את מסד הנתונים ואת תוכנת התעודה. זה לוקח לעיתים כמה דקות. בסוף מודפס `https://mysugar.duckdns.org`. פותחים את הכתובת. עם התשובה `no`, האתר מבקש את סוד ה-API לפני שהוא מציג נתונים.
 
-## הרצה בלי שאלות
+ב-AndroidAPS או ב-xDrip מגדירים את כתובת Nightscout לאותה כתובת `https://...duckdns.org`, ואת סוד ה-API לערך שהקלדתם.
+
+### אם כבר יודעים את כל התשובות
+
+אפשר לדלג על השאלות. `API_SECRET` חובה. השם חייב להיות השם המלא מ-DuckDNS, והאימייל חובה כי הוגדר שם מתחם.
 
 ```bash
 sudo API_SECRET='choose-a-long-secret' DISPLAY_UNITS='mmol' TZ='Asia/Jerusalem' \
-  NS_LANGUAGE=he SITE_LANGUAGE=he NS_DOMAIN='ns.example.com' ACME_EMAIL='you@example.com' \
+  NS_LANGUAGE=he SITE_LANGUAGE=he NS_DOMAIN='mysugar.duckdns.org' ACME_EMAIL='you@example.com' \
   AUTH_DEFAULT_ROLES=denied ./deploy.sh
 ```
 
-בצורה הזו `API_SECRET` חובה. השאר רשות.
+`AUTH_DEFAULT_ROLES=denied` מסתיר את הגרף עד שלמבקר יש את הסוד. `readable` מציג אותו לכל מי שיש לו את הקישור.
 
-| משתנה | ברירת מחדל | ערכים |
-|---|---|---|
-| `API_SECRET` | אין | לפחות 12 תווים |
-| `DISPLAY_UNITS` | `mmol` | `mmol` או `mg/dl` |
-| `TZ` | `Asia/Jerusalem` | אזור זמן IANA |
-| `NS_LANGUAGE` | `en` | `en` או `he`, שפת ההודעות של הסקריפט |
-| `SITE_LANGUAGE` | כמו `NS_LANGUAGE` | `en` או `he`, שפת אתר Nightscout |
-| `NS_DOMAIN` | ריק | שם מתחם ל-HTTPS |
-| `ACME_EMAIL` | ריק | חובה כש-`NS_DOMAIN` מוגדר |
-| `AUTH_DEFAULT_ROLES` | `denied` | `denied` או `readable` |
+הרצה נוספת של `sudo ./deploy.sh` מחליפה את `/opt/nightscout/.env`. צריך להכין את סוד ה-API.
 
-הרצה נוספת של `sudo ./deploy.sh` מחליפה את `/opt/nightscout/.env`. שומרים את סוד ה-API.
+### כשמשהו נכשל
 
-## אחר כך
+| מה רואים | מה עושים |
+|---|---|
+| SSH לא מתחבר | המכונה במצב Running, המשתמש הוא `ubuntu`, וזה המפתח הפרטי שהורד עבור המכונה הזו. |
+| הדפדפן מסתובב ולא נטען | ב-security list חסר TCP 80 או 443. מוסיפים אותם, ואז מריצים שוב `sudo ./deploy.sh`. |
+| הדפדפן מזהיר לגבי התעודה | `nslookup yourname.duckdns.org` חייב להדפיס את כתובת ה-IP הציבורית של Oracle. אחר כך על השרת מריצים `cd /opt/nightscout && sudo docker compose restart caddy` ומחכים כמה דקות. |
+| הדף נפתח והטלפון נדחה | הכתובת בתוכנת ההעלאה היא `https://` ועוד שם ה-DuckDNS, וסוד ה-API זהה לגמרי, כולל אותיות גדולות. |
+| עצרתם את השרת והאתר נעלם | מכונה שנעצרה יכולה לחזור עם כתובת IP ציבורית חדשה. מעתיקים את הכתובת החדשה ל-DuckDNS, לוחצים **update ip**, ומפעילים מחדש את Caddy עם הפקודה למעלה. הטוקן מעמוד DuckDNS הוא הדרך השנייה לעדכן: `https://www.duckdns.org/update?domains=mysugar&token=YOUR_TOKEN&ip=NEW_IP` |
 
-יומן:
+יומן על השרת:
 
 ```bash
 cd /opt/nightscout && sudo docker compose logs -f
 ```
 
-עדכון הקונטיינרים (נתוני הסוכר נשארים ב-`mongo-data`):
+### עדכונים ועותק של הנתונים
 
-```bash
-cd /opt/nightscout
-sudo docker compose pull
-sudo docker compose up -d
-```
-
-גיבוי. עוצרים את השירותים כדי שהעותק יהיה עקבי, ואז מעתיקים את שני הקבצים אל מחוץ למכונה:
+היסטוריית הסוכר נמצאת ב-`/opt/nightscout/mongo-data`. סוד ה-API נמצא ב-`/opt/nightscout/.env`. מעתיקים את שניהם אל מחוץ לשרת. דיסק שקיים רק ב-Oracle אינו גיבוי.
 
 ```bash
 cd /opt/nightscout
@@ -213,11 +334,10 @@ sudo tar czf "$HOME/nightscout-mongo-backup.tgz" mongo-data
 sudo docker compose start
 ```
 
-שומרים עותק של `/opt/nightscout/.env` יחד עם הארכיון.
+כדי לעדכן את Nightscout אחר כך, בלי לענות שוב על השאלות:
 
-## אם האתר לא נפתח
-
-1. ה-security list חייב לאפשר TCP 80 ו-443 מ-`0.0.0.0/0`. אחר כך מריצים שוב `sudo ./deploy.sh`.
-2. קוראים את היומן: `cd /opt/nightscout && sudo docker compose logs -f`
-3. אם התעודה נכשלה, רשומת ה-A ב-DNS צריכה להצביע למכונה הזו, ופורטים 80 ו-443 צריכים להיות נגישים. אחר כך: `cd /opt/nightscout && sudo docker compose restart caddy`
-4. על מכונת Micro של 1 GB ממתינים כמה דקות אחרי ההפעלה הראשונה.
+```bash
+cd /opt/nightscout
+sudo docker compose pull
+sudo docker compose up -d
+```
