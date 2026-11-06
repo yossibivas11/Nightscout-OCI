@@ -14,7 +14,7 @@ are allowed in the VCN security list. See README.md.
 
 Non-interactive (all optional except API_SECRET):
   API_SECRET          at least 12 characters
-  DISPLAY_UNITS       mmol or mg/dl          (default mmol)
+  DISPLAY_UNITS       mmol or mg/dl          (default mg/dl)
   TZ                  IANA timezone          (default Asia/Jerusalem)
   NS_LANGUAGE         en or he, prompt language (default en)
   SITE_LANGUAGE       en or he, Nightscout UI   (default: NS_LANGUAGE)
@@ -158,7 +158,7 @@ if [[ -n "${API_SECRET:-}" ]]; then
       "API_SECRET חייב להיות לפחות 12 תווים, בלי גרשיים, בלי # ובלי סימן דולר."
     exit 1
   fi
-  units="${DISPLAY_UNITS:-mmol}"
+  units="${DISPLAY_UNITS:-mg/dl}"
   tz="${TZ:-Asia/Jerusalem}"
   site_lang="${SITE_LANGUAGE:-$PROMPT_LANG}"
   domain="${NS_DOMAIN:-}"
@@ -174,7 +174,7 @@ else
   PROMPT_LANG="${PROMPT_LANG,,}"
   [[ "$PROMPT_LANG" == "he" || "$PROMPT_LANG" == "en" ]] || PROMPT_LANG=en
   secret="$(read_secret)"
-  units="$(ask "Glucose units (mmol or mg/dl)" "יחידות סוכר (mmol או mg/dl)" "mmol")"
+  units="$(ask "Glucose units (mmol or mg/dl)" "יחידות סוכר (mmol או mg/dl)" "mg/dl")"
   tz="$(ask "Timezone" "אזור זמן" "Asia/Jerusalem")"
   site_lang="$(ask "Nightscout language (en/he)" "שפת האתר (en/he)" "$PROMPT_LANG")"
   domain="$(ask "Domain name for HTTPS, or leave empty" "שם מתחם ל-HTTPS, או ריק" "")"
