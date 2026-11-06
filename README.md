@@ -24,9 +24,25 @@ You do the Oracle and DuckDNS steps in a browser. You run `deploy.sh` only after
 
 Log in later at [cloud.oracle.com](https://cloud.oracle.com/) with the cloud account name and the email.
 
-New accounts also get a short trial with credits. The server in the next step is an Always Free shape, so it does not spend those credits. When the trial ends, this server can stay.
+New accounts also get a short trial with credits. The server you create below is an Always Free shape, so it does not spend those credits. When the trial ends, this server can stay.
 
-### 2. Create the server
+### 2. Open the terminal that is already on the Oracle site
+
+You do not install a terminal on your computer, and you do not connect from Windows. Oracle has a terminal in the browser.
+
+1. In the top bar of the Oracle Cloud page, next to the region name, click the **Cloud Shell** icon (it looks like a prompt, `>_`). Choose **Cloud Shell**, not Code Editor.
+2. A black terminal opens at the bottom of the page. The first time, it can take a minute. If a tutorial pops up, close it.
+3. Paste these three lines, one at a time:
+
+```bash
+mkdir -p ~/.ssh
+ssh-keygen -t ed25519 -f ~/.ssh/nightscout -N ""
+cat ~/.ssh/nightscout.pub
+```
+
+4. The last line prints one long line that starts with `ssh-ed25519`. Select that whole line and copy it. Leave Cloud Shell open. The key stays there if you close it later; open Cloud Shell the same way to get it back.
+
+### 3. Create the server
 
 In the console, open the navigation menu, then **Compute**, then **Instances**, then **Create instance**.
 
@@ -37,7 +53,7 @@ In the console, open the navigation menu, then **Compute**, then **Instances**, 
 | Image | **Canonical Ubuntu 24.04**. Ubuntu 22.04 is also fine. Do not choose Oracle Linux. The script stops on anything except Ubuntu. |
 | Shape | **Ampere**, `VM.Standard.A1.Flex`, **1 OCPU**, **6 GB** memory. The free Ampere allowance is 2 OCPUs and 12 GB, so this uses half of it. |
 | Networking | Create a new virtual cloud network. Public subnet. **Assign a public IPv4 address**. |
-| SSH keys | **Generate a key pair**, then download the private key. Save the file. There is no password login. |
+| SSH keys | **Paste a public key**, and paste the `ssh-ed25519` line from Cloud Shell. Do not download a key. |
 
 Click **Create**. Wait until the instance says **Running**. Copy the **Public IP address** from the instance page.
 
@@ -45,7 +61,7 @@ If creation fails with **out of host capacity**, change the availability domain 
 
 Oracle can take back a free server that stays almost idle for a week. A site that receives glucose uploads is normally busy enough. Details are on Oracle's [Always Free](https://docs.oracle.com/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm) page.
 
-### 3. Let the internet reach the site
+### 4. Let the internet reach the site
 
 Oracle allows SSH (port 22) and blocks the web until you add two rules. The script cannot do this part.
 
@@ -60,14 +76,14 @@ Add one rule, then add a second:
 | `0.0.0.0/0` | TCP | `80` |
 | `0.0.0.0/0` | TCP | `443` |
 
-### 4. Create the DuckDNS name
+### 5. Create the DuckDNS name
 
 DuckDNS is free. There is no payment page.
 
 1. Open [duckdns.org](https://www.duckdns.org/) and sign in with Google, GitHub, Reddit, or X.
 2. Under domains, type a short name and add it. Letters and numbers only, for example `mysugar`. The site name becomes `mysugar.duckdns.org`. If the name is taken, pick another.
 3. DuckDNS fills in the IP address of the computer you are using right now. That is your home address, and it is the wrong one. Delete it, paste the **public IP from the Oracle instance page**, and click **update ip**.
-4. Copy the **token** at the top of the DuckDNS page and keep it with the SSH key. You need the token only if the server's IP changes later.
+4. Copy the **token** at the top of the DuckDNS page and keep it somewhere you will find again. You need the token only if the server's IP changes later.
 
 Check from your own computer before you continue. The answer must be the Oracle IP, not your home IP.
 
@@ -75,27 +91,17 @@ Check from your own computer before you continue. The answer must be the Oracle 
 nslookup mysugar.duckdns.org
 ```
 
-### 5. Connect to the server
+### 6. Go into the server from that same terminal
 
-The private key is the file Oracle made you download. On Windows, in PowerShell, from the folder that contains the key:
-
-```powershell
-icacls .\ssh-key.key /inheritance:r /grant:r "${env:USERNAME}:(R)"
-ssh -i .\ssh-key.key ubuntu@YOUR_PUBLIC_IP
-```
-
-Replace `ssh-key.key` with the real file name, and `YOUR_PUBLIC_IP` with the address from the instance page. The first time, type `yes` when SSH asks whether to trust the server.
-
-On macOS or Linux:
+Click the Cloud Shell terminal at the bottom of the Oracle page. If you closed it, click the `>_` icon again and choose **Cloud Shell**. Paste this, with the public IP from the instance page:
 
 ```bash
-chmod 600 ~/Downloads/ssh-key.key
-ssh -i ~/Downloads/ssh-key.key ubuntu@YOUR_PUBLIC_IP
+ssh -i ~/.ssh/nightscout ubuntu@YOUR_PUBLIC_IP
 ```
 
-The login name is `ubuntu`. You are then on the server. The next commands run there, not on your PC.
+The first time, type `yes` and press Enter. You are then on the server. The prompt changes. Every command after this runs on the server.
 
-### 6. Run the script
+### 7. Run the script
 
 ```bash
 sudo apt-get update
@@ -111,7 +117,7 @@ The script asks eight things, in this order. Nothing is shown while you type the
 |---|---|
 | Prompt language (en/he) | `en`, or `he` if you want the rest of the questions in Hebrew. Press Enter to keep `en`. |
 | API secret, twice | At least 12 letters and digits. No spaces, quotes, `#`, or `$`. Write it down. AndroidAPS or xDrip needs the same value. It is saved only in `/opt/nightscout/.env` on the server. |
-| Glucose units | Press Enter for `mmol`, which is the usual choice in Israel. Type `mg/dl` only if the uploader and the pump profile use mg/dL. |
+| Glucose units | Press Enter for `mg/dl`. That is the default. Type `mmol` only if the uploader and the pump profile use mmol/L. |
 | Timezone | Press Enter for `Asia/Jerusalem`. |
 | Nightscout language (en/he) | `he` for a Hebrew site, or `en`. |
 | Domain name for HTTPS | The full DuckDNS name, such as `mysugar.duckdns.org`. No `https://`. |
@@ -127,7 +133,7 @@ In AndroidAPS or xDrip, set the Nightscout URL to that same `https://...duckdns.
 You can skip the questions. `API_SECRET` is required. The domain must be the full DuckDNS name, and the email is required because a domain is set.
 
 ```bash
-sudo API_SECRET='choose-a-long-secret' DISPLAY_UNITS='mmol' TZ='Asia/Jerusalem' \
+sudo API_SECRET='choose-a-long-secret' DISPLAY_UNITS='mg/dl' TZ='Asia/Jerusalem' \
   NS_LANGUAGE=he SITE_LANGUAGE=he NS_DOMAIN='mysugar.duckdns.org' ACME_EMAIL='you@example.com' \
   AUTH_DEFAULT_ROLES=denied ./deploy.sh
 ```
@@ -140,7 +146,7 @@ Running `sudo ./deploy.sh` again replaces `/opt/nightscout/.env`. Have the API s
 
 | What you see | What to do |
 |---|---|
-| SSH does not connect | The instance is Running, the user is `ubuntu`, and this is the private key you downloaded for this instance. |
+| Cloud Shell cannot reach the server | The instance is Running, the command is `ssh -i ~/.ssh/nightscout ubuntu@` plus the public IP, and the pasted key is the one Cloud Shell printed. |
 | The browser spins and never loads | The security list is missing TCP 80 or 443. Add them, then run `sudo ./deploy.sh` again. |
 | The browser warns about the certificate | `nslookup yourname.duckdns.org` must print the Oracle public IP. Then on the server run `cd /opt/nightscout && sudo docker compose restart caddy` and wait a couple of minutes. |
 | The page opens and the phone is rejected | The URL in the uploader is `https://` plus the DuckDNS name, and the API secret matches exactly, including capital letters. |
@@ -195,9 +201,25 @@ Nightscout מציג נתוני חיישן סוכר בדפדפן. הוא אינו
 
 אחר כך נכנסים ב-[cloud.oracle.com](https://cloud.oracle.com/) עם שם חשבון הענן והאימייל.
 
-לחשבון חדש יש גם תקופת ניסיון עם קרדיטים. השרת בשלב הבא הוא מסוג Always Free, ולכן הוא לא מוציא את הקרדיטים האלה. כשתקופת הניסיון נגמרת, השרת הזה יכול להישאר.
+לחשבון חדש יש גם תקופת ניסיון עם קרדיטים. השרת שיוצרים בהמשך הוא מסוג Always Free, ולכן הוא לא מוציא את הקרדיטים האלה. כשתקופת הניסיון נגמרת, השרת הזה יכול להישאר.
 
-### 2. יצירת השרת
+### 2. פתיחת המסוף שכבר נמצא באתר של Oracle
+
+לא מתקינים מסוף על המחשב, ולא מתחברים מ-Windows. ל-Oracle יש מסוף בתוך הדפדפן.
+
+1. בסרגל העליון של עמוד Oracle Cloud, ליד שם האזור, לוחצים על סמל **Cloud Shell** (הוא נראה כמו שורת פקודה, `>_`). בוחרים **Cloud Shell**, לא Code Editor.
+2. מסוף שחור נפתח בתחתית העמוד. בפעם הראשונה זה יכול לקחת דקה. אם קופץ מדריך, סוגרים אותו.
+3. מדביקים את שלוש השורות האלה, אחת בכל פעם:
+
+```bash
+mkdir -p ~/.ssh
+ssh-keygen -t ed25519 -f ~/.ssh/nightscout -N ""
+cat ~/.ssh/nightscout.pub
+```
+
+4. השורה האחרונה מדפיסה שורה ארוכה אחת שמתחילה ב-`ssh-ed25519`. מסמנים את כל השורה ומעתיקים אותה. משאירים את Cloud Shell פתוח. המפתח נשאר שם גם אם סוגרים אחר כך; פותחים את Cloud Shell באותה דרך כדי לחזור אליו.
+
+### 3. יצירת השרת
 
 בקונסול פותחים את תפריט הניווט, אחר כך **Compute**, אחר כך **Instances**, ואז **Create instance**.
 
@@ -208,7 +230,7 @@ Nightscout מציג נתוני חיישן סוכר בדפדפן. הוא אינו
 | Image | **Canonical Ubuntu 24.04**. גם Ubuntu 22.04 מתאים. לא בוחרים Oracle Linux. הסקריפט נעצר על כל מערכת שאינה אובונטו. |
 | Shape | **Ampere**, `VM.Standard.A1.Flex`, **1 OCPU**, **6 GB** זיכרון. המכסה החינמית של Ampere היא 2 OCPUs ו-12 GB, אז זה חצי ממנה. |
 | רשת | יוצרים רשת וירטואלית חדשה. תת-רשת ציבורית. **Assign a public IPv4 address**. |
-| מפתחות SSH | **Generate a key pair**, ואז מורידים את המפתח הפרטי. שומרים את הקובץ. אין כניסה עם סיסמה. |
+| מפתחות SSH | **Paste a public key**, ומדביקים את שורת `ssh-ed25519` מ-Cloud Shell. לא מורידים מפתח. |
 
 לוחצים **Create**. מחכים עד שהמכונה במצב **Running**. מעתיקים את **Public IP address** מעמוד המכונה.
 
@@ -216,7 +238,7 @@ Nightscout מציג נתוני חיישן סוכר בדפדפן. הוא אינו
 
 Oracle יכולה לקחת בחזרה שרת חינמי שנשאר כמעט בלי פעילות במשך שבוע. אתר שמקבל העלאות סוכר בדרך כלל פעיל מספיק. הפירוט בעמוד [Always Free](https://docs.oracle.com/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm) של Oracle.
 
-### 3. לאפשר לאינטרנט להגיע לאתר
+### 4. לאפשר לאינטרנט להגיע לאתר
 
 Oracle מאפשרת SSH (פורט 22) וחוסמת את האתר עד שמוסיפים שני כללים. הסקריפט לא יכול לעשות את החלק הזה.
 
@@ -231,14 +253,14 @@ Oracle מאפשרת SSH (פורט 22) וחוסמת את האתר עד שמוסי
 | `0.0.0.0/0` | TCP | `80` |
 | `0.0.0.0/0` | TCP | `443` |
 
-### 4. יצירת השם ב-DuckDNS
+### 5. יצירת השם ב-DuckDNS
 
 DuckDNS בחינם. אין עמוד תשלום.
 
 1. פותחים את [duckdns.org](https://www.duckdns.org/) ונכנסים עם Google, GitHub, Reddit או X.
 2. תחת domains מקלידים שם קצר ומוסיפים אותו. אותיות וספרות בלבד, למשל `mysugar`. שם האתר יהיה `mysugar.duckdns.org`. אם השם תפוס, בוחרים אחר.
 3. DuckDNS ממלא את כתובת ה-IP של המחשב שבו אתם גולשים עכשיו. זו כתובת הבית, והיא כתובת שגויה. מוחקים אותה, מדביקים את **כתובת ה-IP הציבורית מעמוד המכונה ב-Oracle**, ולוחצים **update ip**.
-4. מעתיקים את ה-**token** מראש עמוד DuckDNS ושומרים אותו עם מפתח ה-SSH. צריך את הטוקן רק אם כתובת ה-IP של השרת תשתנה אחר כך.
+4. מעתיקים את ה-**token** מראש עמוד DuckDNS ושומרים אותו במקום שאפשר למצוא אחר כך. צריך את הטוקן רק אם כתובת ה-IP של השרת תשתנה.
 
 בודקים מהמחשב שלכם לפני שממשיכים. התשובה חייבת להיות כתובת ה-IP של Oracle, לא כתובת הבית.
 
@@ -246,27 +268,17 @@ DuckDNS בחינם. אין עמוד תשלום.
 nslookup mysugar.duckdns.org
 ```
 
-### 5. התחברות לשרת
+### 6. כניסה לשרת מאותו מסוף
 
-המפתח הפרטי הוא הקובץ ש-Oracle גרמה לכם להוריד. ב-Windows, ב-PowerShell, מהתיקייה שבה נמצא המפתח:
-
-```powershell
-icacls .\ssh-key.key /inheritance:r /grant:r "${env:USERNAME}:(R)"
-ssh -i .\ssh-key.key ubuntu@YOUR_PUBLIC_IP
-```
-
-מחליפים את `ssh-key.key` בשם הקובץ האמיתי, ואת `YOUR_PUBLIC_IP` בכתובת מעמוד המכונה. בפעם הראשונה מקלידים `yes` כש-SSH שואל אם לסמוך על השרת.
-
-ב-macOS או ב-Linux:
+לוחצים על מסוף Cloud Shell בתחתית העמוד של Oracle. אם סגרתם אותו, לוחצים שוב על הסמל `>_` ובוחרים **Cloud Shell**. מדביקים את זה, עם כתובת ה-IP הציבורית מעמוד המכונה:
 
 ```bash
-chmod 600 ~/Downloads/ssh-key.key
-ssh -i ~/Downloads/ssh-key.key ubuntu@YOUR_PUBLIC_IP
+ssh -i ~/.ssh/nightscout ubuntu@YOUR_PUBLIC_IP
 ```
 
-שם המשתמש הוא `ubuntu`. עכשיו אתם על השרת. הפקודות הבאות רצות שם, לא על המחשב שלכם.
+בפעם הראשונה מקלידים `yes` ולוחצים Enter. עכשיו אתם על השרת. שורת הפקודה משתנה. כל פקודה מכאן רצה על השרת.
 
-### 6. הרצת הסקריפט
+### 7. הרצת הסקריפט
 
 ```bash
 sudo apt-get update
@@ -282,7 +294,7 @@ sudo ./deploy.sh
 |---|---|
 | Prompt language (en/he) | `en`, או `he` אם רוצים את שאר השאלות בעברית. Enter משאיר `en`. |
 | סוד API, פעמיים | לפחות 12 אותיות וספרות. בלי רווחים, בלי גרשיים, בלי `#` ובלי `$`. רושמים אותו. AndroidAPS או xDrip צריכים את אותו ערך. הוא נשמר רק בקובץ `/opt/nightscout/.env` על השרת. |
-| יחידות סוכר | Enter עבור `mmol`, הבחירה הרגילה בישראל. מקלידים `mg/dl` רק אם תוכנת ההעלאה ופרופיל המשאבה משתמשים ב-mg/dL. |
+| יחידות סוכר | Enter עבור `mg/dl`. זו ברירת המחדל. מקלידים `mmol` רק אם תוכנת ההעלאה ופרופיל המשאבה משתמשים ב-mmol/L. |
 | אזור זמן | Enter עבור `Asia/Jerusalem`. |
 | שפת האתר (en/he) | `he` לאתר בעברית, או `en`. |
 | שם מתחם ל-HTTPS | השם המלא מ-DuckDNS, למשל `mysugar.duckdns.org`. בלי `https://`. |
@@ -298,7 +310,7 @@ sudo ./deploy.sh
 אפשר לדלג על השאלות. `API_SECRET` חובה. השם חייב להיות השם המלא מ-DuckDNS, והאימייל חובה כי הוגדר שם מתחם.
 
 ```bash
-sudo API_SECRET='choose-a-long-secret' DISPLAY_UNITS='mmol' TZ='Asia/Jerusalem' \
+sudo API_SECRET='choose-a-long-secret' DISPLAY_UNITS='mg/dl' TZ='Asia/Jerusalem' \
   NS_LANGUAGE=he SITE_LANGUAGE=he NS_DOMAIN='mysugar.duckdns.org' ACME_EMAIL='you@example.com' \
   AUTH_DEFAULT_ROLES=denied ./deploy.sh
 ```
@@ -311,7 +323,7 @@ sudo API_SECRET='choose-a-long-secret' DISPLAY_UNITS='mmol' TZ='Asia/Jerusalem' 
 
 | מה רואים | מה עושים |
 |---|---|
-| SSH לא מתחבר | המכונה במצב Running, המשתמש הוא `ubuntu`, וזה המפתח הפרטי שהורד עבור המכונה הזו. |
+| Cloud Shell לא מגיע לשרת | המכונה במצב Running, הפקודה היא `ssh -i ~/.ssh/nightscout ubuntu@` ועוד כתובת ה-IP הציבורית, והמפתח שהודבק הוא זה ש-Cloud Shell הדפיס. |
 | הדפדפן מסתובב ולא נטען | ב-security list חסר TCP 80 או 443. מוסיפים אותם, ואז מריצים שוב `sudo ./deploy.sh`. |
 | הדפדפן מזהיר לגבי התעודה | `nslookup yourname.duckdns.org` חייב להדפיס את כתובת ה-IP הציבורית של Oracle. אחר כך על השרת מריצים `cd /opt/nightscout && sudo docker compose restart caddy` ומחכים כמה דקות. |
 | הדף נפתח והטלפון נדחה | הכתובת בתוכנת ההעלאה היא `https://` ועוד שם ה-DuckDNS, וסוד ה-API זהה לגמרי, כולל אותיות גדולות. |
