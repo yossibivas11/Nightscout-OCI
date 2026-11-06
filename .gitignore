@@ -1,0 +1,6 @@
+.env
+mongo-data/
+caddy-data/
+caddy-config/
+*.archive
+*.tgz
