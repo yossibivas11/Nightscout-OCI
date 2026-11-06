@@ -117,7 +117,7 @@ The script asks eight things, in this order. Nothing is shown while you type the
 |---|---|
 | Prompt language (en/he) | `en`, or `he` if you want the rest of the questions in Hebrew. Press Enter to keep `en`. |
 | API secret, twice | At least 12 letters and digits. No spaces, quotes, `#`, or `$`. Write it down. AndroidAPS or xDrip needs the same value. It is saved only in `/opt/nightscout/.env` on the server. |
-| Glucose units | Press Enter for `mg/dl`. That is the default. Type `mmol` only if the uploader and the pump profile use mmol/L. |
+| Glucose units | Type `mg/dl`. That is the default for this guide. Pressing Enter keeps `mmol`, which is what the script uses when the line is left blank. |
 | Timezone | Press Enter for `Asia/Jerusalem`. |
 | Nightscout language (en/he) | `he` for a Hebrew site, or `en`. |
 | Domain name for HTTPS | The full DuckDNS name, such as `mysugar.duckdns.org`. No `https://`. |
@@ -294,7 +294,7 @@ sudo ./deploy.sh
 |---|---|
 | Prompt language (en/he) | `en`, או `he` אם רוצים את שאר השאלות בעברית. Enter משאיר `en`. |
 | סוד API, פעמיים | לפחות 12 אותיות וספרות. בלי רווחים, בלי גרשיים, בלי `#` ובלי `$`. רושמים אותו. AndroidAPS או xDrip צריכים את אותו ערך. הוא נשמר רק בקובץ `/opt/nightscout/.env` על השרת. |
-| יחידות סוכר | Enter עבור `mg/dl`. זו ברירת המחדל. מקלידים `mmol` רק אם תוכנת ההעלאה ופרופיל המשאבה משתמשים ב-mmol/L. |
+| יחידות סוכר | מקלידים `mg/dl`. זו ברירת המחדל במדריך הזה. Enter משאיר `mmol`, וזה מה שהסקריפט שומר אם משאירים את השורה ריקה. |
 | אזור זמן | Enter עבור `Asia/Jerusalem`. |
 | שפת האתר (en/he) | `he` לאתר בעברית, או `en`. |
 | שם מתחם ל-HTTPS | השם המלא מ-DuckDNS, למשל `mysugar.duckdns.org`. בלי `https://`. |
