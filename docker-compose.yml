@@ -1,0 +1,55 @@
+services:
+  mongo:
+    image: mongo:5.0.32
+    restart: unless-stopped
+    # Keep MongoDB inside the memory of a 1 GB Always Free VM.
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.25"]
+    ulimits:
+      nofile:
+        soft: 64000
+        hard: 64000
+    volumes:
+      - ./mongo-data:/data/db
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nightscout:
+    image: nightscout/cgm-remote-monitor:latest
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      INSECURE_USE_HTTP: "true"
+      NIGHTSCOUT_HOSTNAME: "0.0.0.0"
+      MONGO_CONNECTION: mongodb://mongo:27017/nightscout
+    expose:
+      - "1337"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - nightscout
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-data:/data
+      - ./caddy-config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
